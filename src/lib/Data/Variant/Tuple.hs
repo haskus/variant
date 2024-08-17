@@ -29,6 +29,9 @@ module Data.Variant.Tuple
    , take4
    , fromTuple4
    , module Data.Tuple
+#if !MIN_VERSION_base(4,18,0)
+   , pattern MkSolo
+#endif
    , Solo (..)
    , Tuple
    , Tuple#
@@ -47,6 +50,16 @@ import GHC.TypeNats
 import Data.Tuple
 
 import Data.Variant.Types
+
+#if !MIN_VERSION_base(4,16,0)
+data Solo a = Solo a
+#endif
+
+#if !MIN_VERSION_base(4,18,0)
+{-# COMPLETE MkSolo #-}
+pattern MkSolo :: a -> Solo a
+pattern MkSolo a = Solo a
+#endif
 
 -- | Uncurry3
 uncurry3 :: (a -> b -> c -> r) -> (a,b,c) -> r

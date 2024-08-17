@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -64,6 +65,10 @@ import Data.Functor.Sum
 import Data.Functor.Product
 import Data.Kind
 import Control.Monad
+
+#if !MIN_VERSION_base(4,18,0)
+import Control.Applicative
+#endif
 
 
 -------------------------------------------
