@@ -3,5 +3,5 @@
 
 Variant and EADT datatypes.
 
-Originally found in `haskus-utils-variant <https://hackage.haskell.org/package/haskus-utils-variant>`_ package with some dependencies on other |haskus-*` packages, it has been
+Originally found in `haskus-utils-variant <https://hackage.haskell.org/package/haskus-utils-variant>`_ package with some dependencies on other ``haskus-*`` packages, it has been
 moved into its own consolidated package to reduce its number of dependencies and to give it a better package name.
