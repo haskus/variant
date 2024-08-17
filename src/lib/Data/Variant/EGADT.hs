@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
@@ -25,6 +26,7 @@ import Data.Variant.VariantF
 import Data.Variant.Types
 import Data.Variant.Functor
 
+#if MIN_VERSION_base(4,18,0)
 -- $setup
 -- >>> :seti -XDataKinds
 -- >>> :seti -XTypeApplications
@@ -40,7 +42,7 @@ import Data.Variant.Functor
 -- >>> :{
 -- >>> data LamF (ast :: Type -> Type) t where
 -- >>>   LamF :: ( ast a -> ast b ) -> LamF ast ( a -> b )
--- >>> 
+-- >>>
 -- >>> data AppF ast t where
 -- >>>   AppF :: ast ( a -> b ) -> ast a -> AppF ast b
 -- >>>
@@ -71,7 +73,55 @@ import Data.Variant.Functor
 -- >>> let z = VF (AppF (VF (LamF f)) (VF (VarF "a")))
 -- >>> :t z
 -- z :: EGADT [LamF, AppF, VarF] Int
+
+#else
+-- $setup
+-- >>> :seti -XDataKinds
+-- >>> :seti -XTypeApplications
+-- >>> :seti -XTypeOperators
+-- >>> :seti -XFlexibleContexts
+-- >>> :seti -XTypeFamilies
+-- >>> :seti -XPatternSynonyms
+-- >>> :seti -XDeriveFunctor
+-- >>> :seti -XGADTs
+-- >>> :seti -XPolyKinds
+-- >>> :seti -XPartialTypeSignatures
+-- >>>
+-- >>> :{
+-- >>> data LamF (ast :: Type -> Type) t where
+-- >>>   LamF :: ( ast a -> ast b ) -> LamF ast ( a -> b )
+-- >>>
+-- >>> data AppF ast t where
+-- >>>   AppF :: ast ( a -> b ) -> ast a -> AppF ast b
+-- >>>
+-- >>> data VarF ast t where
+-- >>>   VarF :: String -> VarF ast Int
+-- >>>
+-- >>> type AST a = EGADT '[LamF,AppF,VarF] a
+-- >>>
+-- >>> :}
 --
+-- >>> let y = VF @(AST Int) (VarF "a")
+-- >>> :t y
+-- y :: EGADT '[LamF, AppF, VarF] Int
+--
+-- >>> :{
+-- >>> case y of
+-- >>>   VF (VarF x) -> print x
+-- >>>   _           -> putStrLn "Not a VarF"
+-- >>> :}
+-- "a"
+--
+-- >>> :{
+-- >>> f :: AST Int -> AST Int
+-- >>> f (VF (VarF x)) = VF (VarF "zz")
+-- >>> f _             = error "Unhandled case"
+-- >>> :}
+--
+-- >>> let z = VF (AppF (VF (LamF f)) (VF (VarF "a")))
+-- >>> :t z
+-- z :: EGADT '[LamF, AppF, VarF] Int
+#endif
 
 
 -- | An EADT with an additional type parameter
