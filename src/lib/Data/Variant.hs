@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeOperators #-}
@@ -326,6 +327,7 @@ toVariantHead :: forall x xs. x -> V (x ': xs)
 {-# INLINABLE toVariantHead #-}
 toVariantHead a = Variant 0 (unsafeCoerce a)
 
+#if MIN_VERSION_base(4,18,0)
 -- | Set the tail
 --
 -- >>> let x = V @Int 10 :: V [Int,String,Float]
@@ -333,6 +335,15 @@ toVariantHead a = Variant 0 (unsafeCoerce a)
 -- >>> :t y
 -- y :: V [Double, Int, String, Float]
 --
+#else
+-- | Set the tail
+--
+-- >>> let x = V @Int 10 :: V [Int,String,Float]
+-- >>> let y = toVariantTail @Double x
+-- >>> :t y
+-- y :: V '[Double, Int, String, Float]
+--
+#endif
 toVariantTail :: forall x xs. V xs -> V (x ': xs)
 {-# INLINABLE toVariantTail #-}
 toVariantTail (Variant t a) = Variant (t+1) a
@@ -424,6 +435,7 @@ mapVariantAt f v@(Variant t a) =
       Nothing -> Variant t a
       Just x  -> Variant t (unsafeCoerce (f x))
 
+#if MIN_VERSION_base(4,18,0)
 -- | Applicative update of a single variant value by index
 --
 -- Example with `Maybe`:
@@ -451,10 +463,43 @@ mapVariantAt f v@(Variant t a) =
 -- v :: V [Int, (), Float]
 --
 -- >>> v <- mapVariantAtM @2 print x
--- 
+--
 -- >>> :t v
 -- v :: V [Int, [Char], ()]
 --
+#else
+-- | Applicative update of a single variant value by index
+--
+-- Example with `Maybe`:
+--
+-- >>> let f s = if s == "Test" then Just (42 :: Word) else Nothing
+-- >>> let x = V @String "Test" :: V [Int,String,Float]
+-- >>> mapVariantAtM @1 f x
+-- Just 42
+--
+-- >>> let y = V @String "NotTest" :: V [Int,String,Float]
+-- >>> mapVariantAtM @1 f y
+-- Nothing
+--
+-- Example with `IO`:
+--
+-- >>> v <- mapVariantAtM @0 print x
+--
+-- >>> :t v
+-- v :: V '[(), String, Float]
+--
+-- >>> v <- mapVariantAtM @1 print x
+-- "Test"
+--
+-- >>> :t v
+-- v :: V '[Int, (), Float]
+--
+-- >>> v <- mapVariantAtM @2 print x
+--
+-- >>> :t v
+-- v :: V '[Int, [Char], ()]
+--
+#endif
 mapVariantAtM :: forall (n :: Nat) a b l m .
    ( KnownNat n
    , Applicative m
