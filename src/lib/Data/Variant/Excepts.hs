@@ -10,7 +10,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -178,8 +177,8 @@ instance (Monad m) => Monad (Excepts es m) where
 #if MIN_VERSION_base(4,12,0)
 instance (MonadFail m) => MonadFail (Excepts es m) where
 #endif
-   {-# INLINABLE fail #-}
-   fail = Excepts . fail
+    {-# INLINABLE fail #-}
+    fail = Excepts . fail
 
 instance MonadTrans (Excepts e) where
     {-# INLINABLE lift #-}
@@ -401,7 +400,7 @@ runBothE ::
    ( KnownNat (Length (b:e2))
    , Monad m
    ) => (forall x y. m x -> m y -> m (x,y)) -> Excepts e1 m a -> Excepts e2 m b -> Excepts (Tail (Product (a:e1) (b:e2))) m (a,b)
-runBothE exec f g = Excepts do
+runBothE exec f g = Excepts $ do
    (v1,v2) <- exec (runE f) (runE g)
    pure (veitherProduct v1 v2)
 
