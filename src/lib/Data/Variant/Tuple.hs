@@ -19,6 +19,10 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 #endif
 
+#if !MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)
+{-# LANGUAGE TypeInType #-}
+#endif
+
 -- | Tuple helpers
 module Data.Variant.Tuple
    ( uncurry3
