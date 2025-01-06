@@ -1,0 +1,6 @@
+packages: .
+
+constraints:
+  -- required until a new version of mwc-random is released
+  -- see: https://github.com/haskell/mwc-random/pull/89
+  random < 1.3
