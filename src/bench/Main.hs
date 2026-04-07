@@ -83,10 +83,10 @@ main = do
    let
       evalEnv n = do
          tree1 <- generate (resize n (arbitrary :: Gen (Node Int)))
-         let tree2 = nodeToVariantNode tree1
+         let !tree2 = force (nodeToVariantNode tree1)
          return  (n,tree1,tree2)
 
-      evalTest (n,tree1,tree2) = bgroup ("Tree Eval at size=" ++ show n)
+      evalTest ~(n,tree1,tree2) = bgroup ("Tree Eval at size=" ++ show n)
          [ bench "ADT"                      $ whnf evalNode tree1
          , bench "Variant ADT - V"          $ whnf evalVariantNode tree2
          , bench "Variant ADT - Safe match" $ whnf evalVariantNodeSafe tree2
