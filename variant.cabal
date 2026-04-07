@@ -1,23 +1,26 @@
 cabal-version:       2.4
 name:                variant
-version:             1.0.1
+version:             1.0.2
 synopsis:            Variant and EADT
 license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Sylvain Henry
 maintainer:          sylvain@haskus.fr
 homepage:            https://www.haskus.org
-copyright:           Sylvain Henry 2024
+copyright:           Sylvain Henry 2026
 category:            System
 build-type:          Simple
 
 description:
    Variant (extensible sum type) and EADT (extensible recursive sum type)
    datatypes.
+extra-doc-files:
+  changelog.md
+
 
 source-repository head
   type: git
-  location: git://github.com/haskus/variant.git
+  location: https://github.com/haskus/variant.git
 
 flag unliftio
   Description: Enable MonadUnliftIO instance
@@ -42,7 +45,7 @@ library
   other-modules:
 
   build-depends:       
-     base                      >= 4.9 && < 5.0
+     base                      >= 4.9 && < 5
    , transformers
    , deepseq
    , exceptions                >= 0.9
