@@ -35,8 +35,8 @@ eadtPattern 'ConsF "Cons"
 eadtPattern 'NilF  "Nil"
 eadtInfixPattern 'ConsF ":->"
 
-type ListF a = VariantF '[NilF, ConsF a]
-type List  a = EADT     '[NilF, ConsF a]
+type ListF a = VariantF [NilF, ConsF a]
+type List  a = EADT     [NilF, ConsF a]
 
 instance Eq a => Eq1 (ConsF a) where
    liftEq cmp (ConsF a e1) (ConsF b e2) = a == b && cmp e1 e2

@@ -17,7 +17,498 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 
--- | Open sum type
+{- | Open sum type
+
+'V' (for Variant) is a sum type, i.e. a wrapper for a value which can be of
+different types. For instance in the following code @x@ is a variant whose value
+can be an @Int@, a @Float@ or a @String@:
+
+> import Data.Variant
+>
+> x :: V [Int,Float,String]
+
+We use a type-level list of types to statically constrain the possible value
+types. Compared to usual sum types (e.g. @Either Int Float@) it allows us to
+have variants which can contain any number of types and to manipulate
+(extend\/filter\/etc.) the list in a type-safe way and without requiring new data
+types.
+
+__See also__
+
+* "Data.Variant.VEither" is a variant biased towards the first type in the
+  list, just like @Either a b@ is biased towards the second type (@b@), allowing
+  instances such as @instance Functor (VEither a)@ which we do not have for 'V'.
+
+* "Data.Variant.Excepts" is a multi-exception monad transformer wrapping
+  'Data.Variant.VEither.VEither'.
+
+* "Data.Variant.EADT" supports recursive sum types based on Variant (Extensible
+  ADTs).
+
+== Why Variant?
+
+In the functional programming world we use algebraic data types (ADT), more
+specifically sum types, to indicate that a value can be of two or more different
+types:
+
+> x,y :: Either String Int
+> x = Left "yo"
+> y = Right 10
+
+What if we want to support more than two types?
+
+__Solution 1: sum types__
+
+We could use different sum types with different constructors for each arity
+(number of different types that the value can have).
+
+> data SumOf3 a b c   = S3_0 a | S3_1 b | S3_2 c
+> data SumOf4 a b c d = S4_0 a | S4_1 b | S4_2 c | S4_3 d
+
+But it is quite hard to work with that many different types and constructors as
+we cannot easily define generic functions working on different sum types without
+a combinatorial explosion.
+
+__Solution 2: recursive ADT__
+
+Instead of adding new sum types we can use a nest of @Either@:
+
+> type SumOf3 a b c   = Either a (Either b c)
+> type SumOf4 a b c d = Either a (Either b (Either c d))
+
+Or more generically:
+
+> data Union (as :: [Type]) where
+>   Union :: Either (Union as) a -> Union (a : as)
+
+This time we can define generic functions without risking a combinatorial
+explosion. The drawback however is that we have changed the representation:
+instead of @tag + value@ where @tag@ is in the range [0,arity-1] we have a
+nest of @tag + (tag + (... (tag + value)))@ where @tag@ is in the range
+[0,1]. It is both inefficient in space and in time (accessing the tag value is
+in O(arity)).
+
+__Solution 3: variant__
+
+'V' gets the best of both approaches: it has the generic interface of
+the \"recursive ADT\" solution and the efficient representation of the \"sum types\"
+solution.
+
+> data Variant (types :: [Type]) = Variant {-# UNPACK #-} !Word Any
+>
+> type role Variant representational
+
+The efficient representation is ensured by the definition of the 'V'
+datatype: an unpacked @Word@ for the tag and a \"pointer\" to the value.
+
+The phantom type list @types@ contains the list of possible types for the value.
+The tag value is used as an index into this list to know the effective type of the
+value.
+
+== Creating Variant values
+
+The easiest way to create a variant value is to use the 'V' pattern synonym:
+
+> x,y :: V [String,Int]
+> x = V "test"
+> y = V @Int 10
+
+Note: for now the compiler cannot use the variant value type list to infer the
+type of the variant value! In the previous example we have to specify the @Int@
+type. Even if it is clear (for us) that it is the obvious unique possibility, it
+is ambiguous for the compiler.
+
+We can also explicitly create a variant by specifying the index (starting from
+0) of the value type with 'toVariantAt':
+
+> x :: V [Int,String,Float]
+> x = toVariantAt @2 5.0
+
+It is especially useful if for some reason we want to have the same type more
+than once in the variant value type list:
+
+> y :: V [Int,Int,String,Int,Float]
+> y = toVariantAt @1 5
+
+== Pattern matching
+
+=== Direct pattern matching with V
+
+Matching a variant value can be done with the 'V' pattern synonym too:
+
+> f :: V [String,Int] -> String
+> f = \case
+>    V s            -> "Found string: " ++ s
+>    V (i :: Int)   -> "Found int: " ++ show i
+>    _              -> undefined
+
+Note: for now the compiler cannot use the variant value type list to infer that
+the pattern-match is complete. Hence we need the wildcard match to avoid a warning.
+
+See "Data.Variant.ContFlow" for safe alternatives that do not require a wildcard
+match and that provide better type inference.
+
+__Basic errors__
+
+If you try to set or match a value type that is not valid, you get a compile-time
+error:
+
+> x :: V [String,Int]
+> x = V @Float 10
+>
+> -- error: `Float' is not a member of [String, Int]
+
+=== Safe pattern matching with continuations
+
+See "Data.Variant.ContFlow" for safe pattern matching using multi-continuations
+('>:>' and '>%:>') that ensure completeness at compile time.
+
+== Operations by index
+
+We can retrieve values by index with 'fromVariantAt':
+
+> x :: V [Int,String,Float]
+> x = toVariantAt @2 5.0
+>
+> > fromVariantAt @0 x
+> Nothing
+> > fromVariantAt @1 x
+> Nothing
+> > fromVariantAt @2 x
+> Just 5.0
+
+== Generic variant functions (variant-polymorphic functions)
+
+=== Splitting variants
+
+We can chose to handle only a subset of the possible value types of a Variant
+by using 'splitVariant'. This is very useful when your variant is open (e.g. an
+exception type) and you want to perform an action for some particular types
+while ignoring the others (e.g. passing the unhandled exceptions to the caller).
+
+For instance in the following example we only handle @Int@ and @Float@
+values. The other ones are considered as left-overs:
+
+> printNum v = case splitVariant @[Float,Int] v of
+>    Right v -> v >%:>
+>       ( \f -> putStrLn ("Found float: " ++ show (f :: Float))
+>       , \i -> putStrLn ("Found int: " ++ show (i :: Int))
+>       )
+>    Left leftovers -> putStrLn "Not a supported number!"
+
+Note that the @printNum@ function above is generic and can be applied to any
+Variant type.
+
+=== Membership constraints: '(:<)', '(:<<)', '(:<?)' #membership
+
+The @c :< cs@ constraint statically ensures that the type @c@ is in the @cs@
+type list and that we can set and match it in a variant with type @V cs@. For
+example:
+
+> newtype Error = Error String
+>
+> showError :: (Error :< cs) => V cs -> String
+> showError = \case
+>    V (Error s) -> "Found error: " ++ s
+>    _           -> "Not an Error!"
+
+Note that to shorten a list of constraints such as @(A :< xs, B :< xs, C :< xs)@
+you can use the '(:<<)' operator: @[A,B,C] :<< xs@.
+
+The @c :< cs@ constraint statically ensures that the type @c@ is in the @cs@
+type list. However in some cases we want to write generic functions that work on
+variants even if they cannot contain the given type.
+
+The '(:<?)'  constraint and the 'VMaybe' pattern can be used for this:
+
+> showErrorMaybe :: (Error :<? cs) => V cs -> String
+> showErrorMaybe = \case
+>    VMaybe (Error s) -> "Found error: " ++ s
+>    _                -> "Not an Error!"
+
+=== Shrinking variants with 'popVariant'
+
+A very common use of variants is to pattern match on a specific value type they
+can contain and to get a new variant containing the left-over value types. This
+is done with 'popVariant' or 'popVariantMaybe' and the 'Remove' type family.
+For example:
+
+> filterError :: Error :<? cs => V cs -> V (Remove Error cs)
+> filterError v = case popVariantMaybe v of
+>    Right (Error s) -> error ("Found error: " ++ s)
+>    Left  v'        -> v' -- left-over variant!
+
+Notice how an @Error@ value cannot be present anymore in the variant type
+returned by @filterError@ and how this function is generic as it supports any
+variant as an input.
+
+== Conversions
+
+=== Singleton conversion
+
+We can easily convert between a variant with a single value type and this value
+type with 'variantToValue' and 'variantFromValue':
+
+> intV :: V [Int]
+> intV = V @Int 10
+>
+> > variantToValue intV
+> 10
+>
+> > :t variantFromValue "Test"
+> variantFromValue "Test" :: V [String]
+
+=== Either conversion
+
+'variantFromEither' and 'variantToEither' can be used to convert between a
+variant of arity 2 and the @Either@ data type:
+
+> eith :: Either Int String
+> eith = Left 10
+>
+> > :t variantFromEither eith
+> variantFromEither eith :: V [String, Int]
+>
+> x,y :: V [String,Int]
+> x = V "test"
+> y = V @Int 10
+>
+> > variantToEither x
+> Right "test"
+>
+> > variantToEither y
+> Left 10
+
+== Extending the list of supported types
+
+We can extend the value types of a variant by appending or prepending a list of
+types with 'appendVariant' and 'prependVariant':
+
+> x :: V [String,Int]
+> x = V "test"
+>
+> data A = A
+> data B = B
+>
+> px = prependVariant @[A,B] x
+> ax = appendVariant @[A,B] x
+>
+> > :t ax
+> ax :: V [String, Int, A, B]
+>
+> > :t px
+> px :: V [A, B, String, Int]
+
+Appending and prepending are very cheap operations: appending just messes with
+types and performs nothing at runtime; prepending only increases the tag value
+at runtime by a constant number.
+
+=== Variant lifting (extending and reordering)
+
+We can extend and reorder the value types of a variant with 'liftVariant':
+
+> x :: V [String,Int]
+> x = V "test"
+>
+> -- adding Double and Float, and reordering
+> y :: V [Double,Int,Float,String]
+> y = liftVariant x
+
+You can use the 'LiftVariant' constraint to write generic code and to ensure
+that the type list @is@ is a subset of @os@:
+
+> liftX :: (LiftVariant is (Double : Float : is))
+>       => V is -> V (Double : Float : is)
+> liftX = liftVariant
+>
+> > :t liftX x
+> liftX x :: V [Double, Float, String, Int]
+
+== Removing duplicates (nub)
+
+If the list of types of a variant contains the same type more than once, we can
+decide to only keep one of them with 'nubVariant':
+
+> > z = nubVariant (V "test" :: V [String,Int,Double,Float,Double,String])
+> > :t z
+> z :: V [String, Int, Double, Float]
+
+== Flattening nested variants
+
+If the value types of a variant are themselves variants, you can flatten them
+with 'flattenVariant':
+
+> x :: V [String,Int]
+> x = V "test"
+>
+> nest :: V [ V [String,Int], V [Float,Double]]
+> nest = V x
+>
+> > :t flattenVariant nest
+> flattenVariant nest :: V [String, Int, Float, Double]
+
+== Joining variants of functors\/monads
+
+We can transform a variant of functor values (e.g., @V [m a, m b, m c]@) into
+a single functor value (e.g., @m (V [a,b,c])@) with 'joinVariant':
+
+> fs0,fs1,fs2 :: V [ Maybe Int, Maybe String, Maybe Double]
+> fs0 = V @(Maybe Int) (Just 10)
+> fs1 = V (Just "Test")
+> fs2 = V @(Maybe Double) Nothing
+>
+> > joinVariant @Maybe fs0
+> Just (V @Int 10)
+>
+> > joinVariant @Maybe fs1
+> Just (V @[Char] "Test")
+>
+> > joinVariant @Maybe fs2
+> Nothing
+
+It also works with @IO@ for example:
+
+> ms0,ms1 :: V [ IO Int, IO String, IO Double]
+> ms0 = V @(IO Int) (printRet 10)
+> ms1 = V (printRet "Test")
+>
+> > joinVariant @IO ms0
+> 10
+> V @Int 10
+>
+> > :t joinVariant @IO ms0
+> joinVariant @IO ms0 :: IO (V [Int, String, Double])
+
+Writing generic code requires the use of the 'JoinVariant' constraint and
+the resulting list of value types can be obtained with the 'ExtractM' type
+family.
+
+With @IO@ it is possible to use 'joinVariantUnsafe' which does not require the
+type application and does not use the 'JoinVariant' type-class. However some
+other functor types are not supported (e.g., @Maybe@) and using
+'joinVariantUnsafe' with them makes the program crash at runtime.
+
+== Combining two variants (product)
+
+We can combine two variants into a single variant containing a tuple with
+'productVariant':
+
+> fl :: V [Float,Double]
+> fl = V @Float 5.0
+>
+> d :: V [Int,Word]
+> d = V @Word 10
+>
+> dfl = productVariant d fl
+>
+> > dfl
+> V @(Word,Float) (10,5.0)
+>
+> > :t dfl
+> dfl :: V [(Int, Float), (Int, Double), (Word, Float), (Word, Double)]
+
+== Converting variants to tuples\/HList
+
+We can convert a Variant into a tuple of 'Maybe's with 'variantToTuple':
+
+> w :: V [String,Int,Double,Maybe Int]
+> w = V @Double 1.0
+>
+> > variantToTuple w
+> (Nothing,Nothing,Just 1.0,Nothing)
+
+And similarly into an HList (heterogeneous list) with 'variantToHList':
+
+> > variantToHList w
+> H[Nothing,Nothing,Just 1.0,Nothing]
+
+== Mapping
+
+=== By type
+
+We can easily apply a function @f :: A -> B@ to a variant so that its value
+type @A@ is replaced with @B@. If the value in the variant has type @A@, then
+@f@ is applied to it to get the new value. Example:
+
+> x,y :: V [String,Int]
+> x = V "test"
+> y = V @Int 10
+>
+> > mapVariant ((+5) :: Int -> Int) x
+> V @String "test"
+>
+> > mapVariant ((+5) :: Int -> Int) y
+> V @Int 15
+
+Note that the resulting variant may contain the same type more than once. To
+avoid this, we can either use 'nubVariant' or directly use 'mapNubVariant':
+
+> > :t mapVariant (length :: String -> Int) x
+> mapVariant (length :: String -> Int) x :: V [Int, Int]
+>
+> > :t mapNubVariant (length :: String -> Int) x
+> mapNubVariant (length :: String -> Int) x :: V [Int]
+>
+> > mapNubVariant (length :: String -> Int) x
+> V @Int 4
+
+=== By index
+
+If we know the index of the value type we want to map, we can use
+'mapVariantAt'. Example:
+
+> x,y :: V [String,Int]
+> x = V "test"
+> y = V @Int 10
+>
+> > mapVariantAt @0 length x
+> V @Int 4
+>
+> > mapVariantAt @0 length y
+> V @Int 10
+>
+> > mapVariantAt @1 (+5) x
+> V @[Char] "test"
+>
+> > mapVariantAt @1 (+5) y
+> V @Int 15
+
+Note that the compiler uses the type of the element whose index is given as
+first argument to infer the type of the functions, hence we do not need type
+ascriptions.
+
+We can use 'mapVariantAtM' to perform an applicative (or monadic) update.
+
+=== First matching type
+
+A variant can have the same type more than once in its value type list.
+'mapVariant' updates all the matching types in the list but sometimes that is
+not what we want. We can use 'mapVariantAt' if we know the index of the type we
+want to update. We can also use 'mapVariantFirst' to update only the first
+matching type:
+
+> vv :: V [Int,Int,Int]
+> vv = toVariantAt @1 5
+>
+> > r0 = mapVariant (show :: Int -> String) vv
+> > r1 = mapVariantFirst (show :: Int -> String) vv
+>
+> > :t r0
+> r0 :: V [String,String,String]
+>
+> > :t r1
+> r1 :: V [String, Int, Int]
+>
+> > r0
+> V @[Char] "5"
+>
+> > r1
+> V @Int 5
+
+We can also apply an applicative (or monadic) function with
+'mapVariantFirstM'.
+
+-}
 module Data.Variant
    ( V (..)
    , variantIndex
@@ -216,7 +707,7 @@ instance
 -- | Haskell code corresponding to a Variant
 --
 -- >>> showsVariant 0 (V @Double 5.0 :: V [Int,String,Double]) ""
--- "V @Double 5.0 :: V '[Int, [Char], Double]"
+-- "V @Double 5.0 :: V [Int, [Char], Double]"
 showsVariant ::
    ( Typeable xs
    , ShowTypeList (V xs)
@@ -238,7 +729,7 @@ instance Show (V '[]) where
 
 -- | Show instance
 --
--- >>> show (V @Int 10  :: V '[Int,String,Double])
+-- >>> show (V @Int 10  :: V [Int,String,Double])
 -- "10"
 instance
    ( Show x
@@ -252,7 +743,7 @@ instance
 -- | Show a list of ShowS
 showList__ :: [ShowS] -> ShowS
 showList__ []     s = "'[]" ++ s
-showList__ (x:xs) s = '\'' : '[' : x (showl xs)
+showList__ (x:xs) s = '[' : x (showl xs)
   where
     showl []     = ']' : s
     showl (y:ys) = ',' : ' ' : y (showl ys)
@@ -294,7 +785,7 @@ variantIndex (Variant n _) = n
 
 -- | Get variant size
 --
--- >>> let x = V "Test" :: V '[Int,String,Double]
+-- >>> let x = V "Test" :: V [Int,String,Double]
 -- >>> variantSize x
 -- 3
 -- >>> let y = toVariantAt @0 10 :: V [Int,String,Double,Int]
@@ -545,7 +1036,7 @@ variantHeadTail fh ft x = case popVariantHead x of
 
 -- | Bimap Variant head and tail 
 --
--- >>> let f = mapVariantHeadTail (+5) (appendVariant @'[Double,Char])
+-- >>> let f = mapVariantHeadTail (+5) (appendVariant @[Double,Char])
 -- >>> f (V @Int 10 :: V [Int,Word,Float])
 -- 15
 --
@@ -701,7 +1192,7 @@ popVariantMaybe v = popVariant' @a v
 
 -- | Pick the first matching type of a Variant
 --
--- >>> let x = toVariantAt @2 10 :: V '[Int,String,Int]
+-- >>> let x = toVariantAt @2 10 :: V [Int,String,Int]
 -- >>> fromVariantFirst @Int x
 -- Nothing
 --
@@ -872,7 +1363,7 @@ mapNubVariant f = nubVariant . mapVariant f
 --
 -- >>> newtype Odd  = Odd Int  deriving (Show)
 -- >>> newtype Even = Even Int deriving (Show)
--- >>> let f x = if even x then V (Even x) else V (Odd x) :: V '[Odd, Even]
+-- >>> let f x = if even x then V (Even x) else V (Odd x) :: V [Odd, Even]
 -- >>> foldMapVariantAt @1 f (V @Int 10 :: V [Float,Int,Double])
 -- Even 10
 --

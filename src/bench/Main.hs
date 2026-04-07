@@ -56,7 +56,7 @@ data Minus a    = Minus a a deriving (Generic,NFData)
 newtype Value a = Value a   deriving newtype (NFData)
 
 newtype VariantNode a
-   = VariantNode (V '[Value a, Plus (VariantNode a), Minus (VariantNode a)])
+   = VariantNode (V [Value a, Plus (VariantNode a), Minus (VariantNode a)])
 
 deriving newtype instance (NFData a) => NFData (VariantNode a)
 
