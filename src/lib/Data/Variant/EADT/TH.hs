@@ -150,7 +150,7 @@ eadtPattern' consName patStr mEadtTy isInfix = do
 
             conTyp = getConTyp tys
 
-            -- [* -> *]
+            -- [Type -> Type]
             tyToTyList = AppT ListT (AppT (AppT ArrowT StarT) StarT)
 
             -- retrieve functor var in "e"

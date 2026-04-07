@@ -8,7 +8,48 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE BangPatterns #-}
 
--- | Continuation based control-flow
+{- | Continuation-based control-flow
+
+This module provides safe pattern matching on 'Data.Variant.V' values using
+multi-continuations. Instead of pattern matching with the @V@ pattern (which
+the compiler cannot check for completeness), we can provide a function per
+constructor as in a pattern-match.
+
+== Safe pattern matching with ordered continuations ('>:>')
+
+With multi-continuations we can transform a variant @V [A,B,C]@ into a
+function whose type is @(A -> r, B -> r, C -> r) -> r@. Hence the compiler
+will ensure that we provide the correct number of alternatives in the
+continuation tuple.
+
+Applying a multi-continuation to a Variant is done with '>:>':
+
+> import Data.Variant.ContFlow
+>
+> printV :: V [String,Int,Float] -> IO ()
+> printV v = v >:>
+>    ( \s -> putStrLn ("Found string: " ++ s)
+>    , \i -> putStrLn ("Found int: " ++ show i)
+>    , \f -> putStrLn ("Found float: " ++ show f)
+>    )
+
+== Safe pattern matching with unordered continuations ('>%:>')
+
+By using the '>%:>' operator instead of '>:>', we can provide continuations in
+any order as long as an alternative for each constructor is provided.
+
+The types must be unambiguous as the Variant constructor types cannot be used to
+infer the continuation types (as is done with '>:>'). Hence the type
+ascriptions in the following example:
+
+> printU :: V [String,Int,Float] -> IO ()
+> printU v = v >%:>
+>    ( \f -> putStrLn ("Found float: " ++ show (f :: Float))
+>    , \s -> putStrLn ("Found string: " ++ s)
+>    , \i -> putStrLn ("Found int: " ++ show (i :: Int))
+>    )
+
+-}
 module Data.Variant.ContFlow
    ( ContFlow (..)
    , ContTuple

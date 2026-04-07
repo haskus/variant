@@ -76,7 +76,7 @@ import Control.DeepSeq
 -- >>>
 -- >>> data ConsF a e = ConsF a e deriving (Eq,Ord,Show,Functor)
 -- >>> data NilF    e = NilF      deriving (Eq,Ord,Show,Functor)
--- >>> type ListF   a = VariantF '[NilF,ConsF a]
+-- >>> type ListF   a = VariantF [NilF,ConsF a]
 -- >>>
 -- >>> instance Eq a => Eq1 (ConsF a) where liftEq cmp (ConsF a e1) (ConsF b e2) = a == b && cmp e1 e2
 -- >>> instance Eq1 NilF where liftEq _ _ _ = True
@@ -102,7 +102,7 @@ newtype VariantF (xs :: [t -> Type]) (e :: t)
 
 -- | Apply its first argument to every element of the 2nd arg list
 --
--- > ApplyAll e '[f,g,h] ==> '[f e, g e, h e]
+-- > ApplyAll e [f,g,h] ==> [f e, g e, h e]
 --
 type family ApplyAll (e :: t) (xs :: [t -> k]) :: [k] where
    ApplyAll e '[]       = '[]
@@ -112,9 +112,9 @@ type instance Base (VariantF xs a) = VariantF xs
 
 -- | Eq instance for VariantF
 --
--- >>> let a = FV (ConsF 'a' "Test") :: VariantF '[ConsF Char,NilF] String
--- >>> let a' = FV (ConsF 'a' "XXX") :: VariantF '[ConsF Char,NilF] String
--- >>> let b = FV (ConsF 'b' "Test") :: VariantF '[ConsF Char,NilF] String
+-- >>> let a = FV (ConsF 'a' "Test") :: VariantF [ConsF Char,NilF] String
+-- >>> let a' = FV (ConsF 'a' "XXX") :: VariantF [ConsF Char,NilF] String
+-- >>> let b = FV (ConsF 'b' "Test") :: VariantF [ConsF Char,NilF] String
 -- >>> a == a
 -- True
 -- >>> a == a'
@@ -122,12 +122,12 @@ type instance Base (VariantF xs a) = VariantF xs
 -- >>> a == b
 -- False
 --
--- >>> let c = FV (ConsF 'c' b) :: VariantF '[ConsF Char,NilF] (VariantF '[ConsF Char, NilF] String)
+-- >>> let c = FV (ConsF 'c' b) :: VariantF [ConsF Char,NilF] (VariantF [ConsF Char, NilF] String)
 -- >>> c == c
 -- True
 --
--- >>> let n1 = FV (NilF :: NilF ()) :: VariantF '[ConsF Char,NilF] ()
--- >>> let n2 = FV (NilF :: NilF ()) :: VariantF '[ConsF Char,NilF] ()
+-- >>> let n1 = FV (NilF :: NilF ()) :: VariantF [ConsF Char,NilF] ()
+-- >>> let n2 = FV (NilF :: NilF ()) :: VariantF [ConsF Char,NilF] ()
 -- >>> n1 == n2
 -- True
 --
@@ -141,9 +141,9 @@ instance
 
 -- | Ord instance for VariantF
 --
--- >>> let a = FV (ConsF 'a' "Test") :: VariantF '[ConsF Char,NilF] String
--- >>> let a' = FV (ConsF 'a' "XXX") :: VariantF '[ConsF Char,NilF] String
--- >>> let b = FV (ConsF 'b' "Test") :: VariantF '[ConsF Char,NilF] String
+-- >>> let a = FV (ConsF 'a' "Test") :: VariantF [ConsF Char,NilF] String
+-- >>> let a' = FV (ConsF 'a' "XXX") :: VariantF [ConsF Char,NilF] String
+-- >>> let b = FV (ConsF 'b' "Test") :: VariantF [ConsF Char,NilF] String
 -- >>> compare a a
 -- EQ
 -- >>> compare a a'
@@ -203,8 +203,8 @@ instance
 
 -- | Show instance for VariantF
 --
--- >>> let a = FV (ConsF 'a' "Test") :: VariantF '[ConsF Char,NilF] String
--- >>> let b = FV (NilF :: NilF String) :: VariantF '[ConsF Char,NilF] String
+-- >>> let a = FV (ConsF 'a' "Test") :: VariantF [ConsF Char,NilF] String
+-- >>> let b = FV (NilF :: NilF String) :: VariantF [ConsF Char,NilF] String
 -- >>> print a
 -- ConsF 'a' "Test"
 -- >>> print b
@@ -229,7 +229,7 @@ instance (Functor (VariantF fs), Functor f) => Functor (VariantF (f ': fs)) wher
 
 -- | Pattern-match in a VariantF
 --
--- >>> FV (NilF :: NilF String) :: VariantF '[ConsF Char,NilF] String
+-- >>> FV (NilF :: NilF String) :: VariantF [ConsF Char,NilF] String
 -- NilF
 pattern FV :: forall c cs e. c :< (ApplyAll e cs) => c -> VariantF cs e
 pattern FV x = VariantF (V x)

@@ -20,10 +20,68 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
--- | Variant biased towards one type
---
--- This allows definition of common type classes (Functor, etc.) that can't  be
--- provided for Variant
+{- | Variant biased towards one type
+
+Variants have types like @V [W,X,Y,Z]@. This is great when all the inner types
+play the same role. However in some cases we want one type to be the main one
+and the other ones to be secondaries.
+
+For instance we could have @V [Result,ErrorA,ErrorB,ErrorC]@ to represent the
+result of a function. In this case, the first type is the main one and it would
+be great to be able to define the common type-classes ('Functor', 'Monad',
+etc.) so that we have easy access to it.
+
+'VEither' is a 'V' wrapper that does exactly this:
+
+> newtype VEither es a = VEither (V (a : es))
+
+It is isomorphic to @Either (V es) a@. The difference is in the runtime
+representation: @VEither es a@ has one less indirection than @Either (V es) a@
+(it uses only one tag value).
+
+== Pattern matching (VRight and VLeft)
+
+'VEither' values can be created and matched on with the 'VRight' and 'VLeft'
+patterns (just as if we had the @Either (V es) a@ type).
+
+> >>> VRight True :: VEither [String,Int] Bool
+> VRight True
+>
+> >>> VLeft (V "failed" :: V [String,Int]) :: VEither [String,Int] Bool
+> VLeft "failed"
+
+== Common instances
+
+The main advantage of @VEither es a@ over @V (a ': es)@ is that we can define
+instances for common type-classes such as 'Functor', 'Applicative', 'Monad',
+'Foldable', etc.:
+
+> > let x = VRight True :: VEither [Int,Float] Bool
+> > fmap (\b -> if b then "Success" else "Failure") x
+> VRight "Success"
+>
+> > let x = VRight True  :: VEither [Int,Float] Bool
+> > let y = VRight False :: VEither [Int,Float] Bool
+> > (&&) \<$> x \<*> y
+> VRight False
+>
+> > let x   = VRight True    :: VEither [Int,Float] Bool
+> > let f v = VRight (not v) :: VEither [Int,Float] Bool
+> > x >>= f
+> VRight False
+>
+> > let x = VRight True :: VEither [Int,Float] Bool
+> > let y = VLeft (V "failed" :: V [String,Int]) :: VEither [String,Int] Bool
+> > forM_ x print
+> True
+> > forM_ y print
+
+== See also
+
+* "Data.Variant.Excepts" — multi-exception monad transformer wrapping 'VEither'
+* "Data.Variant" — the underlying 'V' type
+
+-}
 module Data.Variant.VEither
    ( VEither
    , pattern VLeft
@@ -68,7 +126,7 @@ newtype VEither es a
 
 -- | Left value
 --
--- >>> VLeft (V "failed" :: V '[String,Int]) :: VEither '[String,Int] Bool
+-- >>> VLeft (V "failed" :: V [String,Int]) :: VEither [String,Int] Bool
 -- VLeft "failed"
 --
 pattern VLeft :: forall x xs. V xs -> VEither xs x
@@ -78,7 +136,7 @@ pattern VLeft xs <- ((popVariantHead . veitherToVariant) -> Left xs)
 
 -- | Right value
 --
--- >>> VRight True :: VEither '[String,Int] Bool
+-- >>> VRight True :: VEither [String,Int] Bool
 -- VRight True
 pattern VRight :: forall x xs. x -> VEither xs x
 pattern VRight x <- ((popVariantHead . veitherToVariant) -> Right x)
@@ -93,10 +151,10 @@ pattern VRight x <- ((popVariantHead . veitherToVariant) -> Right x)
 
 -- | Check VEithers for equality
 --
--- >>> let a = VRight "Foo" :: VEither '[Int,Double] String
--- >>> let b = VRight "Foo" :: VEither '[Int,Double] String
--- >>> let c = VRight "Bar" :: VEither '[Int,Double] String
--- >>> let d = VLeft (V (1::Int) :: V '[Int, Double]) :: VEither '[Int,Double] String
+-- >>> let a = VRight "Foo" :: VEither [Int,Double] String
+-- >>> let b = VRight "Foo" :: VEither [Int,Double] String
+-- >>> let c = VRight "Bar" :: VEither [Int,Double] String
+-- >>> let d = VLeft (V (1::Int) :: V [Int, Double]) :: VEither [Int,Double] String
 -- >>> a == b
 -- True
 -- >>> a == c
@@ -113,8 +171,8 @@ deriving newtype instance (Eq (V (a ': es))) => Eq (VEither es a)
 
 -- | Compare VEithers
 --
--- >>> let a = VRight "Foo" :: VEither '[Int,Double] String
--- >>> let b = VRight "Bar" :: VEither '[Int,Double] String
+-- >>> let a = VRight "Foo" :: VEither [Int,Double] String
+-- >>> let b = VRight "Bar" :: VEither [Int,Double] String
 -- >>> a < b
 -- False
 -- >>> a > b
@@ -140,7 +198,7 @@ instance
 
 -- | Convert a Variant into a VEither
 --
--- >>> let x = V "Test" :: V '[Int,String,Double]
+-- >>> let x = V "Test" :: V [Int,String,Double]
 -- >>> veitherFromVariant x
 -- VLeft "Test"
 --
@@ -150,7 +208,7 @@ veitherFromVariant = VEither
 
 -- | Convert a VEither into a Variant
 --
--- >>> let x = VRight True :: VEither '[Int,Float] Bool
+-- >>> let x = VRight True :: VEither [Int,Float] Bool
 -- >>> veitherToVariant x
 -- True
 --
@@ -160,7 +218,7 @@ veitherToVariant (VEither x) = x
 
 -- | Convert a VEither into an Either
 --
--- >>> let x = VRight True :: VEither '[Int,Float] Bool
+-- >>> let x = VRight True :: VEither [Int,Float] Bool
 -- >>> veitherToEither x
 -- Right True
 --
@@ -181,7 +239,7 @@ veitherToValue = coerce (variantToValue @a)
 
 -- | Bimap for VEither
 --
--- >>> let x = VRight True :: VEither '[Int,Float] Bool
+-- >>> let x = VRight True :: VEither [Int,Float] Bool
 -- >>> veitherBimap id not x
 -- VRight False
 --
@@ -229,7 +287,7 @@ veitherProduct (VEither x) (VEither y) = VEither (productVariant x y)
 
 -- | Functor instance for VEither
 --
--- >>> let x = VRight True :: VEither '[Int,Float] Bool
+-- >>> let x = VRight True :: VEither [Int,Float] Bool
 -- >>> fmap (\b -> if b then "Success" else "Failure") x
 -- VRight "Success"
 --
@@ -239,8 +297,8 @@ instance Functor (VEither es) where
 
 -- | Applicative instance for VEither
 --
--- >>> let x = VRight True  :: VEither '[Int,Float] Bool
--- >>> let y = VRight False :: VEither '[Int,Float] Bool
+-- >>> let x = VRight True  :: VEither [Int,Float] Bool
+-- >>> let y = VRight False :: VEither [Int,Float] Bool
 -- >>> (&&) <$> x <*> y
 -- VRight False
 -- >>> (||) <$> x <*> y
@@ -255,8 +313,8 @@ instance Applicative (VEither es) where
 
 -- | Monad instance for VEither
 --
--- >>> let x   = VRight True    :: VEither '[Int,Float] Bool
--- >>> let f v = VRight (not v) :: VEither '[Int,Float] Bool
+-- >>> let x   = VRight True    :: VEither [Int,Float] Bool
+-- >>> let f v = VRight (not v) :: VEither [Int,Float] Bool
 -- >>> x >>= f
 -- VRight False
 --
@@ -266,8 +324,8 @@ instance Monad (VEither es) where
 
 -- | Foldable instance for VEither
 --
--- >>> let x   = VRight True    :: VEither '[Int,Float] Bool
--- >>> let y   = VLeft (V "failed" :: V '[String,Int]) :: VEither '[String,Int] Bool
+-- >>> let x   = VRight True    :: VEither [Int,Float] Bool
+-- >>> let y   = VLeft (V "failed" :: V [String,Int]) :: VEither [String,Int] Bool
 -- >>> forM_ x print
 -- True
 -- >>> forM_ y print
