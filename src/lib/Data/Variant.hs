@@ -303,6 +303,35 @@ Appending and prepending are very cheap operations: appending just messes with
 types and performs nothing at runtime; prepending only increases the tag value
 at runtime by a constant number.
 
+The 'Concat' type family lets us write generic functions that extend an input
+variant with a fixed set of additional types. For instance, here is a function
+that turns specific 'Int' values into dedicated error constructors and forwards
+everything else by appending the new error types to the input variant type:
+
+> data Error0 = Error0 deriving Show
+> data Error1 = Error1 deriving Show
+>
+> checkErr ::
+>    ( Int :< is
+>    , os ~ Concat is [Error0, Error1]
+>    , Error0 :< os
+>    , Error1 :< os
+>    ) => V is -> V os
+> checkErr = \case
+>    V (0 :: Int) -> V Error0
+>    V (1 :: Int) -> V Error1
+>    v            -> appendVariant @[Error0, Error1] v
+>
+> > checkErr (V @Int 0 :: V [Float,Int])
+> V @Error0 Error0
+>
+> > checkErr (V @Float 5.0 :: V [Float,Int])
+> V @Float 5.0
+>
+> > :t checkErr (V @Float 5.0 :: V [Float,Int,String,Double])
+> checkErr (V @Float 5.0 :: V [Float,Int,String,Double])
+>    :: V [Float, Int, String, Double, Error0, Error1]
+
 === Variant lifting (extending and reordering)
 
 We can extend and reorder the value types of a variant with 'liftVariant':
